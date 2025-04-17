@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>University Map</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100%; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize the map centered on the US with a higher zoom level
+        var map = L.map('map').setView([39.8283, -98.5795], 5); // Center of US with zoom level 5
+        
+        // Add Stadia Stamen Toner Lite basemap
+        var Stadia_StamenTonerLite = L.tileLayer('https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.{ext}', {
+            minZoom: 0,
+            maxZoom: 20,
+            attribution: '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://www.stamen.com/" target="_blank">Stamen Design</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            ext: 'png'
+        }).addTo(map);
+        
+        // Fetch university data
+        fetch('universities_coordinates.csv')
+            .then(response => response.text())
+            .then(data => {
+                console.log("CSV data loaded successfully");
+                
+                // Parse CSV more carefully
+                const rows = data.split('\n');
+                const headers = rows[0].split(',').map(h => h.trim());
+                
+                console.log("CSV Headers:", headers);
+                
+                // Find column indices
+                const latIndex = headers.indexOf('Latitude');
+                const lngIndex = headers.indexOf('Longitude');
+                const nameIndex = headers.indexOf('University');
+                const programIndex = headers.indexOf('Program');
+                const modeIndex = headers.indexOf('Mode');
+                
+                console.log("Column indices - Lat:", latIndex, "Lng:", lngIndex, "Name:", nameIndex, 
+                            "Program:", programIndex, "Mode:", modeIndex);
+                
+                if (latIndex === -1 || lngIndex === -1 || nameIndex === -1) {
+                    console.error('Required columns not found in CSV');
+                    console.log('Available headers:', headers);
+                    alert('Could not find required columns in the CSV file. Check the console for details.');
+                    return;
+                }
+                
+                // Add markers for each university
+                for (let i = 1; i < rows.length; i++) {
+                    if (!rows[i].trim()) continue;
+                    
+                    // Parse CSV row, handling quoted fields that may contain commas
+                    let columns = [];
+                    let inQuote = false;
+                    let currentValue = '';
+                    
+                    for (let j = 0; j < rows[i].length; j++) {
+                        const char = rows[i][j];
+                        
+                        if (char === '"') {
+                            inQuote = !inQuote;
+                        } else if (char === ',' && !inQuote) {
+                            columns.push(currentValue);
+                            currentValue = '';
+                        } else {
+                            currentValue += char;
+                        }
+                    }
+                    
+                    // Add the last value
+                    columns.push(currentValue);
+                    
+                    const lat = parseFloat(columns[latIndex]);
+                    const lng = parseFloat(columns[lngIndex]);
+                    const name = columns[nameIndex].replace(/"/g, '');
+                    
+                    // Get program and mode info if available
+                    const program = programIndex !== -1 ? columns[programIndex].replace(/"/g, '') : 'N/A';
+                    const mode = modeIndex !== -1 ? columns[modeIndex].replace(/"/g, '') : 'N/A';
+                    
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        // Create tooltip content with all information
+                        const tooltipContent = `
+                            <strong>${name}</strong><br>
+                            <strong>Program:</strong> ${program}<br>
+                            <strong>Mode:</strong> ${mode}<br>
+                            <strong>Coordinates:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}
+                        `;
+                        
+                        // Create circle marker with tooltip instead of popup
+                        L.circleMarker([lat, lng], {
+                            radius: 5,
+                            color: 'blue',
+                            fillColor: 'blue',
+                            fillOpacity: 0.7,
+                            weight: 1
+                        }).bindTooltip(tooltipContent, {
+                            permanent: false,
+                            direction: 'top',
+                            className: 'custom-tooltip',
+                            opacity: 0.9
+                        }).addTo(map);
+                    } else {
+                        console.warn('Invalid coordinates for:', name, 'Lat:', columns[latIndex], 'Lng:', columns[lngIndex]);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                alert('Error loading university data: ' + error.message);
+            });
+    </script>
+</body>
+</html>
